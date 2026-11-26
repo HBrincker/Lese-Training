@@ -56,7 +56,12 @@
     box-shadow: 0 6px 0 var(--line);
     padding: 22px 16px 24px; text-align: center;
   }
-  #hint { font-size: 1.25rem; color: var(--muted); margin-bottom: 10px; }
+  #tag {
+    display: inline-block; min-height: 1.6em;
+    font-size: 1.05rem; font-weight: bold; color: var(--muted);
+  }
+  #tag span { background: #f6f2ff; border-radius: 12px; padding: 3px 12px; }
+  #hint { font-size: 1.25rem; color: var(--muted); margin: 4px 0 10px; }
   #word {
     display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
     font-size: clamp(3rem, 12vw, 5.5rem); font-weight: bold; letter-spacing: 2px;
@@ -70,9 +75,7 @@
   }
   #slot.filled { color: var(--text); border-color: var(--accent); background: #fff6d6; }
   #slot.solved { border: 4px solid transparent; background: transparent; color: var(--text); padding: 0; margin-left: 0; min-width: 0; }
-  #emo {
-    font-size: clamp(3rem, 12vw, 5rem); margin-left: 16px; display: none;
-  }
+  #emo { font-size: clamp(3rem, 12vw, 5rem); margin-left: 16px; display: none; }
   #emo.show { display: inline-block; animation: emopop .6s ease-out; }
   @keyframes emopop { 0% { transform: scale(0) rotate(-30deg); } 70% { transform: scale(1.3) rotate(8deg); } 100% { transform: scale(1); } }
   #word.cheer { animation: cheer .6s ease-out; }
@@ -93,9 +96,8 @@
   /* ---------- Karten ---------- */
   #cards {
     margin-top: 26px; width: 100%; max-width: 900px;
-    display: flex; flex-wrap: wrap; align-content: flex-start;
+    display: flex; flex-wrap: wrap; align-content: flex-start; justify-content: center;
     gap: var(--gap, 18px);
-    justify-content: var(--justify, center);
     min-height: 200px;
   }
   .card {
@@ -161,10 +163,11 @@
   }
   .panel h1 { font-size: clamp(2.2rem, 8vw, 3rem); margin: 0 0 8px; }
   .panel p { font-size: 1.4rem; margin: 10px 0; line-height: 1.35; }
+  .panel .small { font-size: 1.05rem; color: var(--muted); }
   .found { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 4px; }
   .found span {
     background: #f6f2ff; border-radius: 14px; padding: 6px 12px;
-    font-size: 1.25rem; font-weight: bold;
+    font-size: 1.2rem; font-weight: bold;
   }
   .demo { display: inline-flex; gap: 10px; margin: 8px 0; }
   .demo div {
@@ -173,6 +176,20 @@
     box-shadow: 0 4px 0 #5a45c9;
     color: #fff; font-weight: bold; font-size: 1.6rem;
     display: flex; align-items: center; justify-content: center;
+  }
+  .pack {
+    background: #f6f2ff; border-radius: 20px; padding: 12px 16px; margin: 14px 0 6px;
+    text-align: left; font-size: 1.15rem;
+  }
+  .pack b { font-size: 1.25rem; }
+  .meter { height: 14px; border-radius: 8px; background: #e2d9f7; overflow: hidden; margin: 6px 0 10px; }
+  .meter div { height: 100%; border-radius: 8px; }
+  .meter .m-new { background: #a48bff; }
+  .meter .m-sure { background: var(--good); }
+  .gift { font-size: 1.5rem; font-weight: bold; animation: emopop .7s ease-out; }
+  .reset {
+    margin-top: 18px; background: none; border: none; cursor: pointer;
+    font: inherit; font-size: .95rem; color: var(--muted); text-decoration: underline;
   }
 
   @media (max-width: 600px) {
@@ -189,6 +206,7 @@
   </div>
 
   <div id="wordbox">
+    <div id="tag"></div>
     <div id="hint">Welche Karte macht das Wort fertig?</div>
     <div id="word"><span id="start"></span><span id="slot">?</span><span id="emo"></span></div>
     <button class="btn" id="choose" disabled>✓ Das passt!</button>
@@ -202,11 +220,19 @@
 (function () {
   "use strict";
 
-  const ROUNDS = 12;
+  // ================= Einstellungen =================
+  const PACK_SIZE = 30;     // Wörter pro Päckchen
+  const GAME_LEN = 12;      // Wörter pro Spiel (ohne Wiederholungen von Fehlern)
+  const NEW_PER_GAME = 5;   // neue Wörter pro Spiel, sobald schon ein paar gelernt sind
+  const SURE = 2;           // ab so vielen Punkten gilt ein Wort als „sicher"
+  const OLD_PACK_WEIGHT = 0.5; // ältere Päckchen kommen seltener dran
+  const SAVE_KEY = "wm-stand-v1";
 
-  // Anfang, Ende, Bild, ähnliche (falsche) Enden
+  // Anfang, Ende, Bild, ähnliche (falsche) Enden.
   // Die ähnlichen Enden sind so gewählt, dass sie kein echtes Wort ergeben.
+  // Je 30 Wörter bilden ein Päckchen (in dieser Reihenfolge).
   const WORDS = [
+    // ---------- Päckchen 1 ----------
     ["Kne", "te", "🎨", ["de", "ze", "ta", "tu"]],
     ["Ha", "se", "🐰", ["ze", "so", "fe", "me"]],
     ["Ho", "se", "👖", ["ze", "sa", "be", "ne"]],
@@ -233,52 +259,151 @@
     ["Pup", "pe", "🪆", ["be", "pa", "pi", "ke"]],
     ["Bril", "le", "👓", ["la", "li", "ne", "re"]],
     ["Gei", "ge", "🎻", ["ke", "ga", "gi", "che"]],
-    ["Zie", "ge", "🐐", ["ke", "ga", "gi", "che"]]
-  ].map(w => ({ start: w[0], end: w[1], emo: w[2], close: w[3] }));
+    ["Zie", "ge", "🐐", ["ke", "ga", "gi", "che"]],
+    ["Bie", "ne", "🐝", ["me", "na", "ni", "le"]],
+    ["Kro", "ne", "👑", ["me", "te", "ni", "le"]],
+    ["Pal", "me", "🌴", ["ne", "mo", "mi", "be"]],
+    // ---------- Päckchen 2 ----------
+    ["Ka", "tze", "🐱", ["ze", "tse", "tza", "tzi"]],
+    ["Rau", "pe", "🐛", ["be", "pa", "pi", "ge"]],
+    ["Schne", "cke", "🐌", ["ke", "cka", "cki", "gge"]],
+    ["Kä", "se", "🧀", ["ze", "sa", "fe", "ne"]],
+    ["Mu", "schel", "🐚", ["schal", "schil", "chel", "sel"]],
+    ["Ham", "mer", "🔨", ["ner", "mar", "mir", "wer"]],
+    ["Pin", "sel", "🖌️", ["sal", "sil", "zel", "fel"]],
+    ["Ti", "ger", "🐯", ["ker", "gar", "gir", "der"]],
+    ["Lö", "we", "🦁", ["ve", "wa", "wi", "be"]],
+    ["Robo", "ter", "🤖", ["der", "tar", "tir", "ser"]],
+    ["Ku", "chen", "🍰", ["chan", "chin", "chon", "gen"]],
+    ["Ho", "nig", "🍯", ["mig", "nag", "nug", "lig"]],
+    ["But", "ter", "🧈", ["der", "tar", "tir", "ser"]],
+    ["Kame", "ra", "📷", ["la", "ri", "ro", "na"]],
+    ["Zitro", "ne", "🍋", ["me", "na", "ni", "le"]],
+    ["Melo", "ne", "🍉", ["me", "na", "ni", "le"]],
+    ["Gur", "ke", "🥒", ["ge", "ka", "ki", "che"]],
+    ["Am", "pel", "🚦", ["bel", "pal", "pil", "fel"]],
+    ["Va", "se", "🏺", ["ze", "sa", "fe", "ne"]],
+    ["Ra", "be", "🐦", ["de", "ba", "bi", "we"]],
+    ["Möh", "re", "🥕", ["le", "ra", "ri", "de"]],
+    ["Ze", "bra", "🦓", ["pra", "bro", "bri", "dra"]],
+    ["Sä", "ge", "🪚", ["ke", "ga", "gi", "che"]],
+    ["Tor", "te", "🎂", ["de", "ze", "to", "ti"]],
+    ["Fe", "der", "🪶", ["ter", "dar", "dir", "ler"]],
+    ["Ki", "wi", "🥝", ["vi", "wa", "wo", "bi"]],
+    ["Giraf", "fe", "🦒", ["ve", "fa", "fi", "pe"]],
+    ["Pingu", "in", "🐧", ["im", "an", "un", "ein"]],
+    ["Mü", "tze", "🧢", ["ze", "tse", "tza", "tzi"]],
+    ["Lu", "pe", "🔍", ["be", "pa", "pi", "ke"]]
+  ].map((w, i) => ({ start: w[0], end: w[1], emo: w[2], close: w[3], key: w[0] + w[1], pack: Math.floor(i / PACK_SIZE) }));
 
-  // Ganz andere Enden für den Anfang (keine gemeinsamen Buchstaben mit dem richtigen Ende)
-  const FAR = ["xu", "ul", "ix", "ob", "ru", "wa", "ug", "bo", "ol", "ek", "au", "ip", "om", "eu", "pf", "ox"];
+  const PACKS = [];
+  WORDS.forEach(w => { (PACKS[w.pack] = PACKS[w.pack] || []).push(w); });
 
-  // Wie viele Karten und wie viele ähnliche Enden je Runde
-  function level(i) {
-    if (i < 3) return { cards: 2, close: 0 };
-    if (i < 5) return { cards: 3, close: 1 };
-    if (i < 7) return { cards: 4, close: 2 };
-    if (i < 9) return { cards: 4, close: 3 };
-    if (i < 11) return { cards: 5, close: 4 };
-    return { cards: 6, close: 4 };
+  // Ganz andere Enden (keine gemeinsamen Buchstaben mit dem richtigen Ende)
+  const FAR = ["xu", "ix", "ob", "ru", "wa", "ug", "bo", "ol", "ek", "ip", "om", "eu", "pf", "ox"];
+
+  // Schwierigkeit hängt an den Punkten des Wortes:
+  // neues Wort = 2 Karten mit ganz anderem Ende, gut geübtes Wort = viele ähnliche Karten.
+  function level(score) {
+    if (score <= 0) return { cards: 2, close: 0, gap: "min(30vw, 260px)" };
+    if (score === 1) return { cards: 3, close: 1, gap: "min(12vw, 110px)" };
+    if (score === 2) return { cards: 4, close: 2, gap: "min(6vw, 50px)" };
+    if (score === 3) return { cards: 4, close: 3, gap: "22px" };
+    if (score === 4) return { cards: 5, close: 4, gap: "12px" };
+    return { cards: 6, close: 4, gap: "10px" };
   }
 
-  // Abstand zwischen den Karten: am Anfang weit auseinander, später dicht
-  function spacing(i) {
-    if (i < 3) return { gap: "min(30vw, 260px)", justify: "center" };
-    if (i < 5) return { gap: "min(12vw, 110px)", justify: "center" };
-    if (i < 7) return { gap: "min(6vw, 50px)", justify: "center" };
-    if (i < 9) return { gap: "22px", justify: "center" };
-    return { gap: "10px", justify: "center" };
-  }
-
-  // ---------- Hilfen ----------
+  // ================= Hilfen =================
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const sharesLetter = (a, b) => a.toLowerCase().split("").some(ch => b.toLowerCase().includes(ch));
-  function store(key, val) {
-    try { if (val === undefined) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) { return null; }
-  }
 
-  function makeRound(w, i) {
-    const lv = level(i);
+  function makeCards(w, lv) {
     const close = shuffle(w.close).slice(0, Math.min(lv.close, lv.cards - 1));
-    const farPool = shuffle(FAR.filter(f => !sharesLetter(f, w.end) && !close.includes(f)));
-    const far = farPool.slice(0, lv.cards - 1 - close.length);
+    const far = shuffle(FAR.filter(f => !sharesLetter(f, w.end) && !close.includes(f))).slice(0, lv.cards - 1 - close.length);
     return shuffle([{ text: w.end, right: true }].concat(close.concat(far).map(t => ({ text: t, right: false }))));
   }
 
-  // ---------- Elemente ----------
+  // ================= Spielstand =================
+  // words[key] = { s: Punkte, n: wie oft gespielt, r: wie oft gleich richtig }
+  let save = loadSave();
+
+  function emptySave() { return { pack: 0, words: {}, games: 0 }; }
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && typeof s === "object" && s.words) return s;
+      }
+    } catch (e) { /* ohne gespeicherten Stand weiter */ }
+    return emptySave();
+  }
+  function writeSave() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* nicht schlimm */ }
+  }
+  const info = w => save.words[w.key];
+  const seen = w => !!info(w);
+  const score = w => (info(w) ? info(w).s : 0);
+
+  function packStatus(p) {
+    const list = PACKS[p] || [];
+    return {
+      total: list.length,
+      learned: list.filter(seen).length,
+      sure: list.filter(w => score(w) >= SURE).length
+    };
+  }
+  // Ein Päckchen ist geschafft, wenn alle Wörter gelernt und „sicher" sind.
+  function checkUnlock() {
+    let opened = false;
+    while (save.pack < PACKS.length - 1) {
+      const st = packStatus(save.pack);
+      if (st.learned === st.total && st.sure === st.total) { save.pack++; opened = true; }
+      else break;
+    }
+    return opened;
+  }
+
+  // Gewicht für Wiederholungen: je mehr Punkte, desto seltener.
+  function weight(w) {
+    const base = 1 / Math.pow(1 + score(w), 2);
+    return w.pack === save.pack ? base : base * OLD_PACK_WEIGHT;
+  }
+  function weightedPick(list, n) {
+    const pool = list.slice(), out = [];
+    while (out.length < n && pool.length) {
+      const total = pool.reduce((a, w) => a + weight(w), 0);
+      let r = Math.random() * total, k = 0;
+      for (; k < pool.length - 1; k++) { r -= weight(pool[k]); if (r <= 0) break; }
+      out.push(pool.splice(k, 1)[0]);
+    }
+    return out;
+  }
+
+  function buildGame() {
+    const current = PACKS[save.pack];
+    const unseen = current.filter(w => !seen(w));
+    const known = WORDS.filter(seen);
+    let newCount = 0;
+    if (unseen.length) {
+      newCount = known.length < GAME_LEN ? GAME_LEN - known.length : NEW_PER_GAME;
+      newCount = Math.max(Math.min(NEW_PER_GAME, unseen.length), Math.min(newCount, unseen.length));
+    }
+    const fresh = shuffle(unseen).slice(0, newCount);
+    const review = weightedPick(known, GAME_LEN - fresh.length);
+    // leichte (wenig Punkte) zuerst, schwere zum Schluss
+    return fresh.concat(review)
+      .map(w => ({ w: w, isNew: !seen(w), repeat: false, sort: score(w) + Math.random() * 0.9 }))
+      .sort((a, b) => a.sort - b.sort);
+  }
+
+  // ================= Elemente =================
   const startEl = document.getElementById("start");
   const slotEl = document.getElementById("slot");
   const emoEl = document.getElementById("emo");
   const wordEl = document.getElementById("word");
   const hintEl = document.getElementById("hint");
+  const tagEl = document.getElementById("tag");
   const chooseBtn = document.getElementById("choose");
   const cardsEl = document.getElementById("cards");
   const progressEl = document.getElementById("progress");
@@ -286,11 +411,16 @@
   const panel = document.getElementById("panel");
   const soundBtn = document.getElementById("soundBtn");
 
-  // ---------- Töne ----------
-  let sound = store("wm-sound") !== "off";
+  // ================= Töne =================
+  let sound = true;
+  try { sound = localStorage.getItem("wm-sound") !== "off"; } catch (e) { /* Standard: an */ }
   let ac = null;
   function updateSoundBtn() { soundBtn.style.opacity = sound ? "1" : ".4"; }
-  soundBtn.addEventListener("click", () => { sound = !sound; store("wm-sound", sound ? "on" : "off"); updateSoundBtn(); });
+  soundBtn.addEventListener("click", () => {
+    sound = !sound;
+    try { localStorage.setItem("wm-sound", sound ? "on" : "off"); } catch (e) { /* egal */ }
+    updateSoundBtn();
+  });
   updateSoundBtn();
   function tones(freqs, dur, type, vol) {
     if (!sound) return;
@@ -313,36 +443,38 @@
   const sfxRight = () => tones([523, 659, 784, 1047], 0.09, "triangle", 0.18);
   const sfxWrong = () => tones([240, 190], 0.13, "sine", 0.12);
 
-  // ---------- Zustand ----------
-  let order = [], round = 0, word = null, cards = [], openIdx = -1, busy = false, solved = false, found = [];
+  // ================= Spielablauf =================
+  let queue = [], pos = 0, cur = null, cards = [], openIdx = -1, busy = false, solved = false;
+  let results = [], newlyLearned = 0, packAtStart = 0;
 
   function drawProgress() {
     progressEl.innerHTML = "";
-    for (let i = 0; i < ROUNDS; i++) {
+    queue.forEach((q, i) => {
       const s = document.createElement("span");
-      s.textContent = "⭐";
-      if (i < round || (i === round && solved)) s.className = "done";
+      s.textContent = q.repeat ? "🔁" : "⭐";
+      if (i < pos || (i === pos && solved)) s.className = "done";
       progressEl.appendChild(s);
-    }
+    });
   }
 
   function startRound() {
-    word = order[round];
+    cur = queue[pos];
+    cur.wrong = false;
     solved = false; busy = false; openIdx = -1;
-    startEl.textContent = word.start;
+    const w = cur.w;
+    startEl.textContent = w.start;
     slotEl.textContent = "?";
     slotEl.className = "";
-    emoEl.className = ""; emoEl.textContent = word.emo;
+    emoEl.className = ""; emoEl.textContent = w.emo;
+    tagEl.innerHTML = cur.repeat ? "<span>🔁 Nochmal üben</span>" : cur.isNew ? "<span>🆕 Neues Wort</span>" : "";
     hintEl.textContent = "Welche Karte macht das Wort fertig?";
     chooseBtn.textContent = "✓ Das passt!";
     chooseBtn.disabled = true;
     chooseBtn.onclick = choose;
 
-    const sp = spacing(round);
-    cardsEl.style.setProperty("--gap", sp.gap);
-    cardsEl.style.setProperty("--justify", sp.justify);
-
-    cards = makeRound(word, round);
+    const lv = level(score(w));
+    cardsEl.style.setProperty("--gap", lv.gap);
+    cards = makeCards(w, lv);
     cardsEl.innerHTML = "";
     cards.forEach((c, i) => {
       const el = document.createElement("div");
@@ -360,7 +492,7 @@
   function flip(i) {
     if (busy || solved) return;
     const c = cards[i];
-    if (openIdx === i) {             // dieselbe Karte nochmal: wieder zudecken
+    if (openIdx === i) {
       c.el.classList.remove("open");
       openIdx = -1;
       slotEl.textContent = "?"; slotEl.className = "";
@@ -376,11 +508,30 @@
     chooseBtn.disabled = false;
   }
 
+  // Punkte vergeben und speichern
+  function record(w, firstTry, isRepeat) {
+    const d = save.words[w.key] || { s: 0, n: 0, r: 0 };
+    if (!save.words[w.key]) newlyLearned++;
+    if (!isRepeat) {
+      d.n++;
+      if (firstTry) { d.s++; d.r++; }
+      else d.s = Math.max(0, d.s - 1);
+    }
+    save.words[w.key] = d;
+    writeSave();
+  }
+
   function choose() {
     if (busy || solved || openIdx < 0) return;
     const c = cards[openIdx];
+    const w = cur.w;
     if (c.right) {
       solved = true;
+      record(w, !cur.wrong, cur.repeat);
+      // Erst falsch? Dann kommt das Wort am Ende nochmal.
+      if (cur.wrong && !cur.repeat) queue.push({ w: w, isNew: false, repeat: true });
+      results.push({ w: w, ok: !cur.wrong, repeat: cur.repeat });
+
       c.el.classList.add("right");
       slotEl.className = "solved";
       emoEl.className = "show";
@@ -389,12 +540,12 @@
       sfxRight();
       const r = wordEl.getBoundingClientRect();
       burst(r.left + r.width / 2, r.top + r.height / 2);
-      found.push(word.start + word.end + " " + word.emo);
-      hintEl.textContent = "Super! Das Wort heißt:";
-      chooseBtn.textContent = round + 1 < ROUNDS ? "Weiter ➜" : "Fertig ➜";
+      hintEl.textContent = cur.wrong && !cur.repeat ? "Gefunden! Das Wort üben wir am Ende nochmal." : "Super! Das Wort heißt:";
+      chooseBtn.textContent = pos + 1 < queue.length ? "Weiter ➜" : "Fertig ➜";
       chooseBtn.onclick = next;
       drawProgress();
     } else {
+      cur.wrong = true;
       busy = true;
       chooseBtn.disabled = true;
       sfxWrong();
@@ -410,8 +561,8 @@
   }
 
   function next() {
-    round++;
-    if (round >= ROUNDS) { endGame(); return; }
+    pos++;
+    if (pos >= queue.length) { endGame(); return; }
     startRound();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -433,18 +584,44 @@
 
   function startGame() {
     overlay.classList.add("hidden");
-    order = shuffle(WORDS).slice(0, ROUNDS);
-    round = 0; found = [];
+    queue = buildGame();
+    pos = 0; results = []; newlyLearned = 0;
+    packAtStart = save.pack;
     startRound();
   }
 
+  function packHtml() {
+    const p = save.pack, st = packStatus(p);
+    const learnedPct = Math.round(st.learned / st.total * 100);
+    const surePct = Math.round(st.sure / st.total * 100);
+    const phase = st.learned < st.total ? "Neue Wörter lernen" : "Wiederholen, bis alle sicher sind";
+    return '<div class="pack">' +
+      "<b>📦 Päckchen " + (p + 1) + " von " + PACKS.length + "</b><br>" +
+      '<span class="small">' + phase + "</span>" +
+      "<div>Gelernt: " + st.learned + " von " + st.total + "</div>" +
+      '<div class="meter"><div class="m-new" style="width:' + learnedPct + '%"></div></div>' +
+      "<div>Sicher: " + st.sure + " von " + st.total + "</div>" +
+      '<div class="meter"><div class="m-sure" style="width:' + surePct + '%"></div></div>' +
+      "</div>";
+  }
+
   function endGame() {
+    save.games = (save.games || 0) + 1;
+    const opened = checkUnlock();
+    writeSave();
     let list = "";
-    found.forEach(f => { list += "<span>" + f + "</span>"; });
+    results.forEach(r => {
+      const mark = r.repeat ? " 🔁" : r.ok ? "" : " ✏️";
+      list += "<span>" + r.w.key + " " + r.w.emo + mark + "</span>";
+    });
+    const allDone = PACKS.every((pk, i) => packStatus(i).sure === packStatus(i).total);
     panel.innerHTML =
       "<h1>Geschafft! 🎉</h1>" +
-      "<p>Diese Wörter hast du gefunden:</p>" +
+      (newlyLearned ? "<p>" + newlyLearned + (newlyLearned === 1 ? " neues Wort" : " neue Wörter") + " gelernt!</p>" : "<p>Toll wiederholt!</p>") +
       '<div class="found">' + list + "</div>" +
+      (opened ? '<p class="gift">🎁 Päckchen ' + (save.pack + 1) + " ist jetzt offen!</p>" : "") +
+      (allDone ? '<p class="gift">🏆 Alle Päckchen sicher!</p>' : "") +
+      packHtml() +
       '<button class="btn" id="again">Nochmal</button> ' +
       '<a class="btn light" href="index.html">Startseite</a>';
     overlay.classList.remove("hidden");
@@ -453,17 +630,27 @@
   }
 
   function showStart() {
+    const first = Object.keys(save.words).length === 0;
     panel.innerHTML =
       "<h1>🃏 Wort-Memory</h1>" +
       "<p>Oben steht ein Wort, aber das Ende fehlt.</p>" +
       '<div class="demo"><div>?</div><div>?</div></div>' +
       "<p>Dreh die Karten um und lies.<br>Welche macht das Wort fertig?</p>" +
-      '<button class="btn" id="go">Los geht\'s!</button>';
+      packHtml() +
+      '<button class="btn" id="go">' + (first ? "Los geht's!" : "Weiter üben!") + "</button><br>" +
+      (first ? "" : '<button class="reset" id="reset">Spielstand löschen</button>');
     overlay.classList.remove("hidden");
     document.getElementById("go").addEventListener("click", startGame);
+    const rb = document.getElementById("reset");
+    if (rb) rb.addEventListener("click", () => {
+      if (window.confirm("Wirklich den ganzen Spielstand löschen? Alle gelernten Wörter fangen dann von vorn an.")) {
+        save = emptySave();
+        writeSave();
+        showStart();
+      }
+    });
   }
 
-  round = 0;
   drawProgress();
   showStart();
 })();
