@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wort-Memory</title>
+<style>
+  :root {
+    --bg: #f3efff;
+    --text: #2b2118;
+    --muted: #6d5f50;
+    --card: #fffdf7;
+    --line: #e2d9f7;
+    --back1: #7b61ff;
+    --back2: #a48bff;
+    --accent: #ffb703;
+    --accent-dark: #e09a00;
+    --good: #3fb760;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    background-image: radial-gradient(circle at 15% 20%, #fff 0 2px, transparent 3px),
+                      radial-gradient(circle at 70% 60%, #fff 0 2px, transparent 3px);
+    background-size: 90px 90px, 130px 130px;
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 16px 40px;
+  }
+
+  /* ---------- Kopf ---------- */
+  #top {
+    width: 100%; max-width: 900px;
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  }
+  .round-btn {
+    width: 54px; height: 54px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 3px solid var(--line);
+    font-size: 1.6rem; text-decoration: none; cursor: pointer;
+    box-shadow: 0 4px 0 var(--line);
+  }
+  #progress { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; font-size: 1.35rem; }
+  #progress span { opacity: .25; filter: grayscale(1); transition: all .3s; }
+  #progress span.done { opacity: 1; filter: none; animation: starin .5s ease-out; }
+  @keyframes starin { 0% { transform: scale(0) rotate(-90deg); } 70% { transform: scale(1.4); } }
+
+  /* ---------- Wort ---------- */
+  #wordbox {
+    margin-top: 22px; width: 100%; max-width: 900px;
+    background: var(--card); border-radius: 30px;
+    box-shadow: 0 6px 0 var(--line);
+    padding: 22px 16px 24px; text-align: center;
+  }
+  #hint { font-size: 1.25rem; color: var(--muted); margin-bottom: 10px; }
+  #word {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+    font-size: clamp(3rem, 12vw, 5.5rem); font-weight: bold; letter-spacing: 2px;
+    min-height: 1.3em;
+  }
+  #slot {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.8em; height: 1.2em; padding: 0 .12em; margin-left: .05em;
+    border: 4px dashed #b9a9f0; border-radius: 16px;
+    color: #b9a9f0; transition: all .25s;
+  }
+  #slot.filled { color: var(--text); border-color: var(--accent); background: #fff6d6; }
+  #slot.solved { border: 4px solid transparent; background: transparent; color: var(--text); padding: 0; margin-left: 0; min-width: 0; }
+  #emo {
+    font-size: clamp(3rem, 12vw, 5rem); margin-left: 16px; display: none;
+  }
+  #emo.show { display: inline-block; animation: emopop .6s ease-out; }
+  @keyframes emopop { 0% { transform: scale(0) rotate(-30deg); } 70% { transform: scale(1.3) rotate(8deg); } 100% { transform: scale(1); } }
+  #word.cheer { animation: cheer .6s ease-out; }
+  @keyframes cheer { 40% { transform: scale(1.08); } }
+
+  .btn {
+    display: inline-block; margin-top: 18px;
+    font: inherit; font-size: 1.6rem; font-weight: bold;
+    padding: 14px 34px; border-radius: 22px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--text);
+    box-shadow: 0 6px 0 var(--accent-dark); text-decoration: none;
+    transition: opacity .2s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-dark); }
+  .btn:disabled { opacity: .35; cursor: default; transform: none; box-shadow: 0 6px 0 var(--accent-dark); }
+  .btn.light { background: #fff; border: 3px solid var(--line); box-shadow: 0 6px 0 var(--line); }
+
+  /* ---------- Karten ---------- */
+  #cards {
+    margin-top: 26px; width: 100%; max-width: 900px;
+    display: flex; flex-wrap: wrap; align-content: flex-start;
+    gap: var(--gap, 18px);
+    justify-content: var(--justify, center);
+    min-height: 200px;
+  }
+  .card {
+    width: clamp(92px, 22vw, 140px); aspect-ratio: 3 / 4;
+    perspective: 900px; cursor: pointer;
+    animation: deal .45s ease-out backwards;
+  }
+  @keyframes deal { 0% { transform: translateY(-40px) scale(.6) rotate(-10deg); opacity: 0; } }
+  .card .inner {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d; transition: transform .45s;
+  }
+  .card.open .inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; border-radius: 20px;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .back {
+    background:
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,.25) 0 22%, transparent 23%),
+      repeating-linear-gradient(45deg, var(--back1) 0 14px, var(--back2) 14px 28px);
+    border: 5px solid #fff;
+    box-shadow: 0 6px 0 #5a45c9;
+    color: #fff; font-size: 3rem; font-weight: bold;
+  }
+  .front {
+    transform: rotateY(180deg);
+    background: var(--card); border: 5px solid var(--accent);
+    box-shadow: 0 6px 0 var(--accent-dark);
+    font-size: clamp(2rem, 7vw, 3rem); font-weight: bold;
+  }
+  .card.right .front { border-color: var(--good); box-shadow: 0 6px 0 #2c8f49; }
+  .card.wiggle { animation: wiggle .5s ease-in-out; }
+  @keyframes wiggle {
+    0%,100% { transform: translateX(0) rotate(0); }
+    20% { transform: translateX(-10px) rotate(-6deg); }
+    40% { transform: translateX(10px) rotate(6deg); }
+    60% { transform: translateX(-6px) rotate(-3deg); }
+    80% { transform: translateX(4px) rotate(2deg); }
+  }
+  .card.away { opacity: .25; transition: opacity .4s; pointer-events: none; }
+
+  .conf {
+    position: fixed; width: 12px; height: 12px; border-radius: 3px;
+    pointer-events: none; z-index: 20;
+    animation: conf .9s ease-out forwards;
+  }
+  @keyframes conf { to { transform: translate(var(--dx), var(--dy)) rotate(420deg); opacity: 0; } }
+
+  /* ---------- Start und Ende ---------- */
+  #overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(243, 239, 255, .85); padding: 16px;
+  }
+  #overlay.hidden { display: none; }
+  .panel {
+    background: var(--card); border-radius: 32px; padding: 30px 26px;
+    max-width: 560px; width: 100%; text-align: center;
+    box-shadow: 0 10px 0 var(--line), 0 20px 50px rgba(0,0,0,.12);
+    max-height: 92vh; overflow: auto;
+  }
+  .panel h1 { font-size: clamp(2.2rem, 8vw, 3rem); margin: 0 0 8px; }
+  .panel p { font-size: 1.4rem; margin: 10px 0; line-height: 1.35; }
+  .found { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 4px; }
+  .found span {
+    background: #f6f2ff; border-radius: 14px; padding: 6px 12px;
+    font-size: 1.25rem; font-weight: bold;
+  }
+  .demo { display: inline-flex; gap: 10px; margin: 8px 0; }
+  .demo div {
+    width: 54px; height: 72px; border-radius: 12px; border: 3px solid #fff;
+    background: repeating-linear-gradient(45deg, var(--back1) 0 8px, var(--back2) 8px 16px);
+    box-shadow: 0 4px 0 #5a45c9;
+    color: #fff; font-weight: bold; font-size: 1.6rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  @media (max-width: 600px) {
+    .round-btn { width: 46px; height: 46px; font-size: 1.35rem; }
+    #progress { font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+  <div id="top">
+    <a class="round-btn" href="index.html" aria-label="Zur Startseite">🏠</a>
+    <div id="progress"></div>
+    <button class="round-btn" id="soundBtn" aria-label="Töne an oder aus">🎵</button>
+  </div>
+
+  <div id="wordbox">
+    <div id="hint">Welche Karte macht das Wort fertig?</div>
+    <div id="word"><span id="start"></span><span id="slot">?</span><span id="emo"></span></div>
+    <button class="btn" id="choose" disabled>✓ Das passt!</button>
+  </div>
+
+  <div id="cards"></div>
+
+  <div id="overlay"><div class="panel" id="panel"></div></div>
+
+<script>
+(function () {
+  "use strict";
+
+  const ROUNDS = 12;
+
+  // Anfang, Ende, Bild, ähnliche (falsche) Enden
+  // Die ähnlichen Enden sind so gewählt, dass sie kein echtes Wort ergeben.
+  const WORDS = [
+    ["Kne", "te", "🎨", ["de", "ze", "ta", "tu"]],
+    ["Ha", "se", "🐰", ["ze", "so", "fe", "me"]],
+    ["Ho", "se", "👖", ["ze", "sa", "be", "ne"]],
+    ["Na", "se", "👃", ["ze", "so", "de", "ne"]],
+    ["Ro", "se", "🌹", ["ze", "fe", "me", "so"]],
+    ["Do", "se", "🥫", ["ze", "fe", "ma", "so"]],
+    ["Bana", "ne", "🍌", ["me", "ni", "nu", "le"]],
+    ["Toma", "te", "🍅", ["de", "ze", "ti", "tu"]],
+    ["Lam", "pe", "💡", ["be", "pa", "pi", "ke"]],
+    ["Tas", "se", "☕", ["ze", "sa", "si", "fe"]],
+    ["Son", "ne", "☀️", ["me", "na", "ni", "le"]],
+    ["Bir", "ne", "🍐", ["me", "na", "ni", "le"]],
+    ["Fla", "sche", "🍾", ["scha", "schi", "sse", "schu"]],
+    ["Ta", "sche", "👜", ["scha", "schi", "che", "schu"]],
+    ["Na", "del", "🪡", ["tel", "dal", "dil", "dol"]],
+    ["Ap", "fel", "🍎", ["vel", "fal", "fil", "fol"]],
+    ["En", "te", "🦆", ["ze", "ta", "tu", "ti"]],
+    ["Ei", "mer", "🪣", ["wer", "mar", "mir", "mel"]],
+    ["Ga", "bel", "🍴", ["pel", "bal", "bil", "del"]],
+    ["Wol", "ke", "☁️", ["ge", "ka", "ki", "che"]],
+    ["Blu", "me", "🌸", ["ne", "ma", "mi", "be"]],
+    ["Ker", "ze", "🕯️", ["se", "za", "zi", "ke"]],
+    ["Rake", "te", "🚀", ["de", "ze", "ta", "ti"]],
+    ["Pup", "pe", "🪆", ["be", "pa", "pi", "ke"]],
+    ["Bril", "le", "👓", ["la", "li", "ne", "re"]],
+    ["Gei", "ge", "🎻", ["ke", "ga", "gi", "che"]],
+    ["Zie", "ge", "🐐", ["ke", "ga", "gi", "che"]]
+  ].map(w => ({ start: w[0], end: w[1], emo: w[2], close: w[3] }));
+
+  // Ganz andere Enden für den Anfang (keine gemeinsamen Buchstaben mit dem richtigen Ende)
+  const FAR = ["xu", "ul", "ix", "ob", "ru", "wa", "ug", "bo", "ol", "ek", "au", "ip", "om", "eu", "pf", "ox"];
+
+  // Wie viele Karten und wie viele ähnliche Enden je Runde
+  function level(i) {
+    if (i < 3) return { cards: 2, close: 0 };
+    if (i < 5) return { cards: 3, close: 1 };
+    if (i < 7) return { cards: 4, close: 2 };
+    if (i < 9) return { cards: 4, close: 3 };
+    if (i < 11) return { cards: 5, close: 4 };
+    return { cards: 6, close: 4 };
+  }
+
+  // Abstand zwischen den Karten: am Anfang weit auseinander, später dicht
+  function spacing(i) {
+    if (i < 3) return { gap: "min(30vw, 260px)", justify: "center" };
+    if (i < 5) return { gap: "min(12vw, 110px)", justify: "center" };
+    if (i < 7) return { gap: "min(6vw, 50px)", justify: "center" };
+    if (i < 9) return { gap: "22px", justify: "center" };
+    return { gap: "10px", justify: "center" };
+  }
+
+  // ---------- Hilfen ----------
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const sharesLetter = (a, b) => a.toLowerCase().split("").some(ch => b.toLowerCase().includes(ch));
+  function store(key, val) {
+    try { if (val === undefined) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) { return null; }
+  }
+
+  function makeRound(w, i) {
+    const lv = level(i);
+    const close = shuffle(w.close).slice(0, Math.min(lv.close, lv.cards - 1));
+    const farPool = shuffle(FAR.filter(f => !sharesLetter(f, w.end) && !close.includes(f)));
+    const far = farPool.slice(0, lv.cards - 1 - close.length);
+    return shuffle([{ text: w.end, right: true }].concat(close.concat(far).map(t => ({ text: t, right: false }))));
+  }
+
+  // ---------- Elemente ----------
+  const startEl = document.getElementById("start");
+  const slotEl = document.getElementById("slot");
+  const emoEl = document.getElementById("emo");
+  const wordEl = document.getElementById("word");
+  const hintEl = document.getElementById("hint");
+  const chooseBtn = document.getElementById("choose");
+  const cardsEl = document.getElementById("cards");
+  const progressEl = document.getElementById("progress");
+  const overlay = document.getElementById("overlay");
+  const panel = document.getElementById("panel");
+  const soundBtn = document.getElementById("soundBtn");
+
+  // ---------- Töne ----------
+  let sound = store("wm-sound") !== "off";
+  let ac = null;
+  function updateSoundBtn() { soundBtn.style.opacity = sound ? "1" : ".4"; }
+  soundBtn.addEventListener("click", () => { sound = !sound; store("wm-sound", sound ? "on" : "off"); updateSoundBtn(); });
+  updateSoundBtn();
+  function tones(freqs, dur, type, vol) {
+    if (!sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+      const t0 = ac.currentTime;
+      freqs.forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain(), s = t0 + i * dur;
+        o.type = type; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(vol, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+        o.connect(g); g.connect(ac.destination);
+        o.start(s); o.stop(s + dur + 0.05);
+      });
+    } catch (e) { /* ohne Ton weiterspielen */ }
+  }
+  const sfxFlip = () => tones([520], 0.06, "triangle", 0.08);
+  const sfxRight = () => tones([523, 659, 784, 1047], 0.09, "triangle", 0.18);
+  const sfxWrong = () => tones([240, 190], 0.13, "sine", 0.12);
+
+  // ---------- Zustand ----------
+  let order = [], round = 0, word = null, cards = [], openIdx = -1, busy = false, solved = false, found = [];
+
+  function drawProgress() {
+    progressEl.innerHTML = "";
+    for (let i = 0; i < ROUNDS; i++) {
+      const s = document.createElement("span");
+      s.textContent = "⭐";
+      if (i < round || (i === round && solved)) s.className = "done";
+      progressEl.appendChild(s);
+    }
+  }
+
+  function startRound() {
+    word = order[round];
+    solved = false; busy = false; openIdx = -1;
+    startEl.textContent = word.start;
+    slotEl.textContent = "?";
+    slotEl.className = "";
+    emoEl.className = ""; emoEl.textContent = word.emo;
+    hintEl.textContent = "Welche Karte macht das Wort fertig?";
+    chooseBtn.textContent = "✓ Das passt!";
+    chooseBtn.disabled = true;
+    chooseBtn.onclick = choose;
+
+    const sp = spacing(round);
+    cardsEl.style.setProperty("--gap", sp.gap);
+    cardsEl.style.setProperty("--justify", sp.justify);
+
+    cards = makeRound(word, round);
+    cardsEl.innerHTML = "";
+    cards.forEach((c, i) => {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.style.animationDelay = (i * 0.08) + "s";
+      el.innerHTML = '<div class="inner"><div class="face back">?</div><div class="face front"></div></div>';
+      el.querySelector(".front").textContent = c.text;
+      el.addEventListener("click", () => flip(i));
+      c.el = el;
+      cardsEl.appendChild(el);
+    });
+    drawProgress();
+  }
+
+  function flip(i) {
+    if (busy || solved) return;
+    const c = cards[i];
+    if (openIdx === i) {             // dieselbe Karte nochmal: wieder zudecken
+      c.el.classList.remove("open");
+      openIdx = -1;
+      slotEl.textContent = "?"; slotEl.className = "";
+      chooseBtn.disabled = true;
+      return;
+    }
+    if (openIdx >= 0) cards[openIdx].el.classList.remove("open");
+    c.el.classList.add("open");
+    openIdx = i;
+    sfxFlip();
+    slotEl.textContent = c.text;
+    slotEl.className = "filled";
+    chooseBtn.disabled = false;
+  }
+
+  function choose() {
+    if (busy || solved || openIdx < 0) return;
+    const c = cards[openIdx];
+    if (c.right) {
+      solved = true;
+      c.el.classList.add("right");
+      slotEl.className = "solved";
+      emoEl.className = "show";
+      wordEl.classList.remove("cheer"); void wordEl.offsetWidth; wordEl.classList.add("cheer");
+      cards.forEach(o => { if (o !== c) o.el.classList.add("away"); });
+      sfxRight();
+      const r = wordEl.getBoundingClientRect();
+      burst(r.left + r.width / 2, r.top + r.height / 2);
+      found.push(word.start + word.end + " " + word.emo);
+      hintEl.textContent = "Super! Das Wort heißt:";
+      chooseBtn.textContent = round + 1 < ROUNDS ? "Weiter ➜" : "Fertig ➜";
+      chooseBtn.onclick = next;
+      drawProgress();
+    } else {
+      busy = true;
+      chooseBtn.disabled = true;
+      sfxWrong();
+      c.el.classList.remove("wiggle"); void c.el.offsetWidth; c.el.classList.add("wiggle");
+      hintEl.textContent = "Hmm, das passt nicht. Probier eine andere Karte!";
+      setTimeout(() => {
+        c.el.classList.remove("open", "wiggle");
+        openIdx = -1;
+        slotEl.textContent = "?"; slotEl.className = "";
+        busy = false;
+      }, 750);
+    }
+  }
+
+  function next() {
+    round++;
+    if (round >= ROUNDS) { endGame(); return; }
+    startRound();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function burst(x, y) {
+    const colors = ["#ffc823", "#e63946", "#2f6fdf", "#2fa84f", "#ff8fd1", "#9b5de5"];
+    for (let i = 0; i < 22; i++) {
+      const d = document.createElement("div");
+      d.className = "conf";
+      const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 130;
+      d.style.left = x + "px"; d.style.top = y + "px";
+      d.style.setProperty("--dx", Math.cos(a) * r + "px");
+      d.style.setProperty("--dy", Math.sin(a) * r + "px");
+      d.style.background = colors[i % colors.length];
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 950);
+    }
+  }
+
+  function startGame() {
+    overlay.classList.add("hidden");
+    order = shuffle(WORDS).slice(0, ROUNDS);
+    round = 0; found = [];
+    startRound();
+  }
+
+  function endGame() {
+    let list = "";
+    found.forEach(f => { list += "<span>" + f + "</span>"; });
+    panel.innerHTML =
+      "<h1>Geschafft! 🎉</h1>" +
+      "<p>Diese Wörter hast du gefunden:</p>" +
+      '<div class="found">' + list + "</div>" +
+      '<button class="btn" id="again">Nochmal</button> ' +
+      '<a class="btn light" href="index.html">Startseite</a>';
+    overlay.classList.remove("hidden");
+    document.getElementById("again").addEventListener("click", startGame);
+    sfxRight();
+  }
+
+  function showStart() {
+    panel.innerHTML =
+      "<h1>🃏 Wort-Memory</h1>" +
+      "<p>Oben steht ein Wort, aber das Ende fehlt.</p>" +
+      '<div class="demo"><div>?</div><div>?</div></div>' +
+      "<p>Dreh die Karten um und lies.<br>Welche macht das Wort fertig?</p>" +
+      '<button class="btn" id="go">Los geht\'s!</button>';
+    overlay.classList.remove("hidden");
+    document.getElementById("go").addEventListener("click", startGame);
+  }
+
+  round = 0;
+  drawProgress();
+  showStart();
+})();
+</script>
+</body>
+</html>
